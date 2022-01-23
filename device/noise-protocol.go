@@ -286,11 +286,12 @@ func (device *Device) CreateMessageInitiation(peer *Peer) (*MessageInitiation, e
 
 	handshake.mixHash(handshake.remoteStatic[:])
 
+	// create the ephemeral key It's a noisePublicKey...
 	msg := MessageInitiation{
 		Type:      MessageInitiationType,
 		Ephemeral: handshake.localEphemeral.publicKey(),
 	}
-
+	fmt.Printf("CreateMsgInit - msg.ephm: %x\n", msg.Ephemeral)
 	handshake.mixKey(msg.Ephemeral[:])
 	handshake.mixHash(msg.Ephemeral[:])
 
@@ -474,16 +475,14 @@ func (device *Device) CreateMessageResponse(peer *Peer) (*MessageResponse, error
 	handshake.mixHash(msg.Ephemeral[:])
 	handshake.mixKey(msg.Ephemeral[:])
 
-	ss, err := handshake.localEphemeral.sharedSecret(handshake.remoteEphemeral)
-	if err != nil {
-		return nil, err
-	}
-	handshake.mixKey(ss[:])
-	ss, err = handshake.localEphemeral.sharedSecret(handshake.remoteStatic)
-	if err != nil {
-		return nil, err
-	}
-	handshake.mixKey(ss[:])
+	func() {
+		ss := handshake.localEphemeral.sharedSecret(handshake.remoteEphemeral)
+		fmt.Printf("handshake.remoteEphemeral: %d\n", handshake.remoteEphemeral)
+		handshake.mixKey(ss[:])
+		ss = handshake.localEphemeral.sharedSecret(handshake.remoteStatic)
+		fmt.Printf("handshake.remoteStatic: %d\n", handshake.remoteStatic)
+		handshake.mixKey(ss[:])
+	}()
 
 	// add preshared key
 
@@ -521,7 +520,7 @@ func (device *Device) ConsumeMessageResponse(msg *MessageResponse) *Peer {
 	if handshake == nil {
 		return nil
 	}
-
+	fmt.Printf("ConsumeMessageResponse \nlookup id: %+v \n", lookup)
 	var (
 		hash     [blake2s.Size]byte
 		chainKey [blake2s.Size]byte
@@ -543,7 +542,9 @@ func (device *Device) ConsumeMessageResponse(msg *MessageResponse) *Peer {
 		defer device.staticIdentity.RUnlock()
 
 		// finish 3-way DH
-
+		fmt.Printf("--consume msg--\n-mixHash- \nhash: %x\nhandshk.hash: %x\nmsg.ephm\t  :%x\n", hash, handshake.hash, msg.Ephemeral)
+		fmt.Printf("mixKey \nchainKey: %x\nhandshake.chainKey: %x\nmsg.ephm\t :%x\n", chainKey, handshake.chainKey, msg.Ephemeral)
+		fmt.Printf("----------end Consume Msg Response-------\n")
 		mixHash(&hash, &handshake.hash, msg.Ephemeral[:])
 		mixKey(&chainKey, &handshake.chainKey, msg.Ephemeral[:])
 
@@ -628,6 +629,7 @@ func (peer *Peer) BeginSymmetricSession() error {
 			handshake.chainKey[:],
 			nil,
 		)
+		fmt.Println("beginSymmetricSession - ResponseConsumed")
 		isInitiator = true
 	} else if handshake.state == handshakeResponseCreated {
 		KDF2(
@@ -636,11 +638,13 @@ func (peer *Peer) BeginSymmetricSession() error {
 			handshake.chainKey[:],
 			nil,
 		)
+		fmt.Println("beginSymmetricSession - ResponseCreate")
 		isInitiator = false
 	} else {
 		return fmt.Errorf("invalid state for keypair derivation: %v", handshake.state)
 	}
 
+	fmt.Printf("handshake - sendkey: %x \nrecvKey: %x \n", sendKey, recvKey)
 	// zero handshake
 
 	setZero(handshake.chainKey[:])

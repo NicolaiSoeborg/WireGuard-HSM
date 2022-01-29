@@ -111,9 +111,15 @@ func (sk *NoisePrivateKey) publicKey() (pk NoisePublicKey) {
 	return
 }
 
-var errInvalidPublicKey = errors.New("invalid public key")
+// return the private key from the hsm instead
+func (sk *NoisePrivateKey) publicKey(dev *Device) (pk NoisePublicKey) {
+	if dev.staticIdentity.hsmEnabled {
+		return dev.staticIdentity.hsm.PublicKey()
+	}
+	fmt.Println("THIS SHOULD NOT HAVE BEEN CALLED\n")
+}
 
-func (sk *NoisePrivateKey) sharedSecret(pk NoisePublicKey) (ss [NoisePublicKeySize]byte, err error) {
+func (sk *NoisePrivateKey) sharedSecret(pk NoisePublicKey) (ss [NoisePublicKeySize]byte) {
 	apk := (*[NoisePublicKeySize]byte)(&pk)
 	ask := (*[NoisePrivateKeySize]byte)(sk)
 	curve25519.ScalarMult(&ss, ask, apk)

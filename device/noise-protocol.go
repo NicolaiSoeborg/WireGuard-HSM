@@ -358,10 +358,11 @@ func (device *Device) ConsumeMessageInitiation(msg *MessageInitiation) *Peer {
 	// decrypt static key
 	var peerPK NoisePublicKey
 	var key [chacha20poly1305.KeySize]byte
+	var ss [NoisePublicKeySize]byte
 	if device.staticIdentity.hsmEnabled {
-		ss := device.staticIdentity.hsm.Derive(msg.Ephemeral)
+		ss, _ = device.staticIdentity.hsm.DeriveNoise(msg.Ephemeral)
 	} else {
-		ss := device.staticIdentity.privateKey.sharedSecret(msg.Ephemeral)
+		ss = device.staticIdentity.privateKey.sharedSecret(msg.Ephemeral)
 	}
 	if isZero(ss[:]) {
 		return nil
@@ -560,10 +561,11 @@ func (device *Device) ConsumeMessageResponse(msg *MessageResponse) *Peer {
 		setZero(ss[:])
 
 		func() {
+			var ss [NoisePrivateKeySize]byte
 			if device.staticIdentity.hsmEnabled {
-				ss := device.staticIdentity.hsm.Derive(msg.Ephemeral)
+				ss, _ = device.staticIdentity.hsm.DeriveNoise(msg.Ephemeral)
 			} else {
-				ss := device.staticIdentity.privateKey.sharedSecret(msg.Ephemeral)
+				ss = device.staticIdentity.privateKey.sharedSecret(msg.Ephemeral)
 			}
 			mixKey(&chainKey, &chainKey, ss[:])
 			setZero(ss[:])

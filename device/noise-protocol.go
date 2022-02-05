@@ -6,7 +6,7 @@
 package device
 
 import (
-	"encoding/binary"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"sync"
@@ -347,7 +347,7 @@ func (device *Device) ConsumeMessageInitiation(msg *MessageInitiation) *Peer {
 	if msg.Type != MessageInitiationType {
 		return nil
 	}
-
+	fmt.Println("ConsumeMessageInitiation() called")
 	device.staticIdentity.RLock()
 	defer device.staticIdentity.RUnlock()
 
@@ -361,10 +361,13 @@ func (device *Device) ConsumeMessageInitiation(msg *MessageInitiation) *Peer {
 	var ss [NoisePublicKeySize]byte
 	if device.staticIdentity.hsmEnabled {
 		ss, _ = device.staticIdentity.hsm.DeriveNoise(msg.Ephemeral)
+		fmt.Printf("Derived sharedSecret using HSM\n%X\n\n", ss)
 	} else {
 		ss = device.staticIdentity.privateKey.sharedSecret(msg.Ephemeral)
+		fmt.Printf("Derived sharedSecret using SOFT\n%X\n\n", ss)
 	}
 	if isZero(ss[:]) {
+		fmt.Println("ConsumeMessageInitiation(), It's zeRo?")
 		return nil
 	}
 	KDF2(&chainKey, &key, chainKey[:], ss[:])
@@ -443,7 +446,7 @@ func (device *Device) ConsumeMessageInitiation(msg *MessageInitiation) *Peer {
 
 	setZero(hash[:])
 	setZero(chainKey[:])
-
+	fmt.Println("ConsumeMessageInitiation() done-")
 	return peer
 }
 
@@ -471,7 +474,7 @@ func (device *Device) CreateMessageResponse(peer *Peer) (*MessageResponse, error
 	msg.Receiver = handshake.remoteIndex
 
 	// create ephemeral key
-
+	fmt.Printf("Creating a new ephemeral key from thin air\n")
 	handshake.localEphemeral, err = newPrivateKey()
 	if err != nil {
 		return nil, err
@@ -483,9 +486,13 @@ func (device *Device) CreateMessageResponse(peer *Peer) (*MessageResponse, error
 	func() {
 		ss := handshake.localEphemeral.sharedSecret(handshake.remoteEphemeral)
 		fmt.Printf("handshake.remoteEphemeral: %d\n", handshake.remoteEphemeral)
+		b64ss := base64.StdEncoding.EncodeToString(ss[:])
+		fmt.Printf("SS: %s\n", b64ss)
 		handshake.mixKey(ss[:])
 		ss = handshake.localEphemeral.sharedSecret(handshake.remoteStatic)
 		fmt.Printf("handshake.remoteStatic: %d\n", handshake.remoteStatic)
+		b64ss = base64.StdEncoding.EncodeToString(ss[:])
+		fmt.Printf("SS: %s\n", b64ss)
 		handshake.mixKey(ss[:])
 	}()
 
@@ -570,7 +577,6 @@ func (device *Device) ConsumeMessageResponse(msg *MessageResponse) *Peer {
 			mixKey(&chainKey, &chainKey, ss[:])
 			setZero(ss[:])
 		}()
-
 		// add preshared key (psk)
 
 		var tau [blake2s.Size]byte

@@ -6,7 +6,6 @@
 package device
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"sync"
@@ -286,12 +285,11 @@ func (device *Device) CreateMessageInitiation(peer *Peer) (*MessageInitiation, e
 
 	handshake.mixHash(handshake.remoteStatic[:])
 
-	// create the ephemeral key It's a noisePublicKey...
 	msg := MessageInitiation{
 		Type:      MessageInitiationType,
 		Ephemeral: handshake.localEphemeral.publicKey(),
 	}
-	fmt.Printf("CreateMsgInit - msg.ephm: %x\n", msg.Ephemeral)
+
 	handshake.mixKey(msg.Ephemeral[:])
 	handshake.mixHash(msg.Ephemeral[:])
 
@@ -347,7 +345,7 @@ func (device *Device) ConsumeMessageInitiation(msg *MessageInitiation) *Peer {
 	if msg.Type != MessageInitiationType {
 		return nil
 	}
-	fmt.Println("ConsumeMessageInitiation() called")
+
 	device.staticIdentity.RLock()
 	defer device.staticIdentity.RUnlock()
 
@@ -361,13 +359,10 @@ func (device *Device) ConsumeMessageInitiation(msg *MessageInitiation) *Peer {
 	var ss [NoisePublicKeySize]byte
 	if device.staticIdentity.hsmEnabled {
 		ss, _ = device.staticIdentity.hsm.DeriveNoise(msg.Ephemeral)
-		fmt.Printf("Derived sharedSecret using HSM\n%X\n\n", ss)
 	} else {
 		ss = device.staticIdentity.privateKey.sharedSecret(msg.Ephemeral)
-		fmt.Printf("Derived sharedSecret using SOFT\n%X\n\n", ss)
 	}
 	if isZero(ss[:]) {
-		fmt.Println("ConsumeMessageInitiation(), It's zeRo?")
 		return nil
 	}
 	KDF2(&chainKey, &key, chainKey[:], ss[:])
@@ -446,7 +441,7 @@ func (device *Device) ConsumeMessageInitiation(msg *MessageInitiation) *Peer {
 
 	setZero(hash[:])
 	setZero(chainKey[:])
-	fmt.Println("ConsumeMessageInitiation() done-")
+
 	return peer
 }
 
@@ -474,7 +469,7 @@ func (device *Device) CreateMessageResponse(peer *Peer) (*MessageResponse, error
 	msg.Receiver = handshake.remoteIndex
 
 	// create ephemeral key
-	fmt.Printf("Creating a new ephemeral key from thin air\n")
+
 	handshake.localEphemeral, err = newPrivateKey()
 	if err != nil {
 		return nil, err
@@ -485,14 +480,8 @@ func (device *Device) CreateMessageResponse(peer *Peer) (*MessageResponse, error
 
 	func() {
 		ss := handshake.localEphemeral.sharedSecret(handshake.remoteEphemeral)
-		fmt.Printf("handshake.remoteEphemeral: %d\n", handshake.remoteEphemeral)
-		b64ss := base64.StdEncoding.EncodeToString(ss[:])
-		fmt.Printf("SS: %s\n", b64ss)
 		handshake.mixKey(ss[:])
 		ss = handshake.localEphemeral.sharedSecret(handshake.remoteStatic)
-		fmt.Printf("handshake.remoteStatic: %d\n", handshake.remoteStatic)
-		b64ss = base64.StdEncoding.EncodeToString(ss[:])
-		fmt.Printf("SS: %s\n", b64ss)
 		handshake.mixKey(ss[:])
 	}()
 
@@ -532,7 +521,7 @@ func (device *Device) ConsumeMessageResponse(msg *MessageResponse) *Peer {
 	if handshake == nil {
 		return nil
 	}
-	fmt.Printf("ConsumeMessageResponse \nlookup id: %+v \n", lookup)
+
 	var (
 		hash     [blake2s.Size]byte
 		chainKey [blake2s.Size]byte
@@ -554,9 +543,7 @@ func (device *Device) ConsumeMessageResponse(msg *MessageResponse) *Peer {
 		defer device.staticIdentity.RUnlock()
 
 		// finish 3-way DH
-		fmt.Printf("--consume msg--\n-mixHash- \nhash: %x\nhandshk.hash: %x\nmsg.ephm\t  :%x\n", hash, handshake.hash, msg.Ephemeral)
-		fmt.Printf("mixKey \nchainKey: %x\nhandshake.chainKey: %x\nmsg.ephm\t :%x\n", chainKey, handshake.chainKey, msg.Ephemeral)
-		fmt.Printf("----------end Consume Msg Response-------\n")
+
 		mixHash(&hash, &handshake.hash, msg.Ephemeral[:])
 		mixKey(&chainKey, &handshake.chainKey, msg.Ephemeral[:])
 
@@ -577,6 +564,7 @@ func (device *Device) ConsumeMessageResponse(msg *MessageResponse) *Peer {
 			mixKey(&chainKey, &chainKey, ss[:])
 			setZero(ss[:])
 		}()
+
 		// add preshared key (psk)
 
 		var tau [blake2s.Size]byte
@@ -644,7 +632,6 @@ func (peer *Peer) BeginSymmetricSession() error {
 			handshake.chainKey[:],
 			nil,
 		)
-		fmt.Println("beginSymmetricSession - ResponseConsumed")
 		isInitiator = true
 	} else if handshake.state == handshakeResponseCreated {
 		KDF2(
@@ -653,13 +640,11 @@ func (peer *Peer) BeginSymmetricSession() error {
 			handshake.chainKey[:],
 			nil,
 		)
-		fmt.Println("beginSymmetricSession - ResponseCreate")
 		isInitiator = false
 	} else {
 		return fmt.Errorf("invalid state for keypair derivation: %v", handshake.state)
 	}
 
-	fmt.Printf("handshake - sendkey: %x \nrecvKey: %x \n", sendKey, recvKey)
 	// zero handshake
 
 	setZero(handshake.chainKey[:])

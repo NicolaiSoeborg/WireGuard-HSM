@@ -446,7 +446,6 @@ func closeBindLocked(device *Device) error {
 		err = netc.bind.Close()
 	}
 	netc.stopping.Wait()
-
 	return err
 }
 

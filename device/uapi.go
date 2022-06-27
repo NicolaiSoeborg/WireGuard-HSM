@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/garnoth/pkclient"
-	"golang.zx2c4.com/go118/netip"
 	"golang.zx2c4.com/wireguard/ipc"
 )
 

@@ -210,15 +210,15 @@ func (device *Device) handleDeviceLine(key, value string) error {
 		device.log.Verbosef("UAPI: hsm library path:%s", params[0])
 		device.log.Verbosef("UAPI: hsm slot:%s", params[1])
 		var hsmDevice *pkclient.PKClient
-		if len(params) < 3 || params[2] == "" { // pin not saved, get directly from user input
-
+		if len(params) < 3 || params[2] == "" {
+			// pin not saved, get directly from user input
 			device.log.Verbosef("UAPI: Attempting to get pin from user")
 			hsmDevice, err = pkclient.New_AskPin(params[0], uint(slot))
 			if err != nil {
 				return ipcErrorf(ipc.IpcErrorInvalid, "hsm setup failed: %w", err)
 			}
-		} else { // pin supplied in config file
-
+		} else {
+			// pin supplied in config file
 			device.log.Verbosef("UAPI: Reading pin from config file")
 			hsmDevice, err = pkclient.New(params[0], uint(slot), params[2])
 			if err != nil {

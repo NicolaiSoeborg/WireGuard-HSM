@@ -229,6 +229,13 @@ func (device *Device) IsUnderLoad() bool {
 	return device.rate.underLoadUntil.Load() > now.UnixNano()
 }
 
+func (device *Device) DeriveSharedSecret(ephemeral NoisePublicKey) ([NoisePublicKeySize]byte, error) {
+	if device.staticIdentity.hsmEnabled {
+		return device.staticIdentity.hsm.DeriveNoise(ephemeral)
+	}
+	return device.staticIdentity.privateKey.sharedSecret(ephemeral)
+}
+
 func (device *Device) GetNoisePublicKey(sk NoisePrivateKey) (NoisePublicKey, error) {
     if device.staticIdentity.hsmEnabled {
         return device.staticIdentity.hsm.PublicKeyNoise()
@@ -283,6 +290,7 @@ func (device *Device) SetPrivateKey(sk NoisePrivateKey) error {
 	expiredPeers := make([]*Peer, 0, len(device.peers.keyMap))
 	for _, peer := range device.peers.keyMap {
 		handshake := &peer.handshake
+		// TODO add hsm here?
 		handshake.precomputedStaticStatic, _ = device.staticIdentity.privateKey.sharedSecret(handshake.remoteStatic)
 		expiredPeers = append(expiredPeers, peer)
 	}
@@ -393,6 +401,7 @@ func (device *Device) Close() {
 	}
 	device.state.state.Store(uint32(deviceStateClosed))
 	device.log.Verbosef("Device closing")
+
 	if device.staticIdentity.hsmEnabled {
 		device.staticIdentity.hsm.Close()
 	}

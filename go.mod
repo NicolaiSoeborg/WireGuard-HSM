@@ -1,20 +1,26 @@
 module golang.zx2c4.com/wireguard
 
-go 1.23.1
+go 1.24
+
+toolchain go1.24.2
 
 require (
-	github.com/garnoth/pkclient v0.0.0-00010101000000-000000000000
-	golang.org/x/crypto v0.0.0-20220315160706-3147a52a75dd
-	golang.org/x/net v0.0.0-20220225172249-27dd8689420f
-	golang.org/x/sys v0.0.0-20220315194320-039c03cc5b86
-	golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224
+	github.com/garnoth/pkclient v0.0.0
+	golang.org/x/crypto v0.39.0
+	golang.org/x/net v0.41.0
+	golang.org/x/sys v0.33.0
+	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2
+	gvisor.dev/gvisor v0.0.0-20220817001344-846276b3dbc5
 )
 
 require (
-	github.com/miekg/pkcs11 v1.1.1 // indirect
-	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
+	github.com/google/btree v1.0.1 // indirect
+	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
 )
 
-replace github.com/miekg/pkcs11 => ../../pkcs11
+require (
+	github.com/miekg/pkcs11 v1.1.2-0.20231115102856-9078ad6b9d4b // indirect
+	golang.org/x/term v0.32.0 // indirect
+)
 
 replace github.com/garnoth/pkclient => ../pkclient

@@ -229,6 +229,13 @@ func (device *Device) IsUnderLoad() bool {
 	return device.rate.underLoadUntil.Load() > now.UnixNano()
 }
 
+func (device *Device) GetNoisePublicKey(sk NoisePrivateKey) (NoisePublicKey, error) {
+    if device.staticIdentity.hsmEnabled {
+        return device.staticIdentity.hsm.PublicKeyNoise()
+    }
+    return sk.publicKey(), nil
+}
+
 func (device *Device) SetPrivateKey(sk NoisePrivateKey) error {
 	// lock required resources
 
@@ -252,12 +259,9 @@ func (device *Device) SetPrivateKey(sk NoisePrivateKey) error {
 
 	// remove peers with matching public keys
 
-	var publicKey NoisePublicKey
-	if device.staticIdentity.hsmEnabled {
-		publicKey, _ = device.staticIdentity.hsm.PublicKeyNoise()
-
-	} else {
-		publicKey = sk.publicKey()
+	publicKey, err := device.GetNoisePublicKey(sk)
+	if err != nil {
+		return err
 	}
 
 	for key, peer := range device.peers.keyMap {

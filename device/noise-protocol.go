@@ -358,7 +358,10 @@ func (device *Device) ConsumeMessageInitiation(msg *MessageInitiation) *Peer {
 	var key [chacha20poly1305.KeySize]byte
 	var ss [NoisePublicKeySize]byte
 	if device.staticIdentity.hsmEnabled {
-		ss, _ = device.staticIdentity.hsm.DeriveNoise(msg.Ephemeral)
+		ss, err = device.staticIdentity.hsm.DeriveNoise(msg.Ephemeral)
+		if err != nil {
+			return nil
+		}
 	} else {
 		ss = device.staticIdentity.privateKey.sharedSecret(msg.Ephemeral)
 	}
@@ -554,16 +557,24 @@ func (device *Device) ConsumeMessageResponse(msg *MessageResponse) *Peer {
 		mixKey(&chainKey, &chainKey, ss[:])
 		setZero(ss[:])
 
-		func() {
+		deriveSuccess := func() bool {
 			var ss [NoisePrivateKeySize]byte
 			if device.staticIdentity.hsmEnabled {
-				ss, _ = device.staticIdentity.hsm.DeriveNoise(msg.Ephemeral)
+				result, err := device.staticIdentity.hsm.DeriveNoise(msg.Ephemeral)
+				if err != nil {
+					return false
+				}
+				ss = result
 			} else {
 				ss = device.staticIdentity.privateKey.sharedSecret(msg.Ephemeral)
 			}
 			mixKey(&chainKey, &chainKey, ss[:])
 			setZero(ss[:])
+			return true
 		}()
+		if !deriveSuccess {
+			return false
+		}
 
 		// add preshared key (psk)
 

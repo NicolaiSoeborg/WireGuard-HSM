@@ -6,6 +6,7 @@
 package device
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"sync"
@@ -357,16 +358,17 @@ func (device *Device) ConsumeMessageInitiation(msg *MessageInitiation) *Peer {
 	var peerPK NoisePublicKey
 	var key [chacha20poly1305.KeySize]byte
 	var ss [NoisePublicKeySize]byte
+	var err error
 	if device.staticIdentity.hsmEnabled {
 		ss, err = device.staticIdentity.hsm.DeriveNoise(msg.Ephemeral)
 		if err != nil {
 			return nil
 		}
 	} else {
-		ss = device.staticIdentity.privateKey.sharedSecret(msg.Ephemeral)
-	}
-	if isZero(ss[:]) {
-		return nil
+		ss, err = device.staticIdentity.privateKey.sharedSecret(msg.Ephemeral)
+		if err != nil {
+			return nil
+		}	
 	}
 	KDF2(&chainKey, &key, chainKey[:], ss[:])
 	aead, _ := chacha20poly1305.New(key[:])
@@ -481,12 +483,16 @@ func (device *Device) CreateMessageResponse(peer *Peer) (*MessageResponse, error
 	handshake.mixHash(msg.Ephemeral[:])
 	handshake.mixKey(msg.Ephemeral[:])
 
-	func() {
-		ss := handshake.localEphemeral.sharedSecret(handshake.remoteEphemeral)
-		handshake.mixKey(ss[:])
-		ss = handshake.localEphemeral.sharedSecret(handshake.remoteStatic)
-		handshake.mixKey(ss[:])
-	}()
+	ss, err := handshake.localEphemeral.sharedSecret(handshake.remoteEphemeral)
+	if err != nil {
+		return nil, err
+	}
+	handshake.mixKey(ss[:])
+	ss, err = handshake.localEphemeral.sharedSecret(handshake.remoteStatic)
+	if err != nil {
+		return nil, err
+	}
+	handshake.mixKey(ss[:])
 
 	// add preshared key
 
@@ -557,24 +563,19 @@ func (device *Device) ConsumeMessageResponse(msg *MessageResponse) *Peer {
 		mixKey(&chainKey, &chainKey, ss[:])
 		setZero(ss[:])
 
-		deriveSuccess := func() bool {
-			var ss [NoisePrivateKeySize]byte
-			if device.staticIdentity.hsmEnabled {
-				result, err := device.staticIdentity.hsm.DeriveNoise(msg.Ephemeral)
-				if err != nil {
-					return false
-				}
-				ss = result
-			} else {
-				ss = device.staticIdentity.privateKey.sharedSecret(msg.Ephemeral)
+		if device.staticIdentity.hsmEnabled {
+			ss, err = device.staticIdentity.hsm.DeriveNoise(msg.Ephemeral)
+			if err != nil {
+				return false
 			}
-			mixKey(&chainKey, &chainKey, ss[:])
-			setZero(ss[:])
-			return true
-		}()
-		if !deriveSuccess {
-			return false
+		} else {
+			ss, err = device.staticIdentity.privateKey.sharedSecret(msg.Ephemeral)
+			if err != nil {
+				return false
+			}
 		}
+		mixKey(&chainKey, &chainKey, ss[:])
+		setZero(ss[:])
 
 		// add preshared key (psk)
 

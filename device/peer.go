@@ -95,13 +95,9 @@ func (device *Device) NewPeer(pk NoisePublicKey) (*Peer, error) {
 	handshake := &peer.handshake
 	handshake.mutex.Lock()
 	if device.staticIdentity.hsmEnabled {
-		derivedStaticStatic, err := device.staticIdentity.hsm.DeriveNoise(pk)
-		if err != nil {
-			return nil, err
-		}
-		handshake.precomputedStaticStatic = derivedStaticStatic
+		handshake.precomputedStaticStatic, _ = device.staticIdentity.hsm.DeriveNoise(pk)
 	} else {
-		handshake.precomputedStaticStatic = device.staticIdentity.privateKey.sharedSecret(pk)
+		handshake.precomputedStaticStatic, _ = device.staticIdentity.privateKey.sharedSecret(pk)
 	}
 	handshake.remoteStatic = pk
 	handshake.mutex.Unlock()

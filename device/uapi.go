@@ -8,6 +8,7 @@ package device
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -200,15 +201,18 @@ func (device *Device) handleDeviceLine(key, value string) error {
 	case "hsm":
 		params := strings.Split(value, ",")
 		// Example config file syntax:
-		// hsm {path to HSM module}, {slot id}, {pin}
-		// hsm {path to HSM module}, {slot id}  // omit pin to prompt user
+		// hsm={path to HSM module},{slot id},{pin}
+		// hsm={path to HSM module},{slot id}  // omit pin to prompt user
+
+		if len(params) < 2 {
+			return ipcErrorf(ipc.IpcErrorInvalid, "invalid hsm line")
+		}
 
 		slot, err := strconv.Atoi(params[1])
 		if err != nil {
 			return ipcErrorf(ipc.IpcErrorInvalid, "hsm slot invalid: %w", err)
 		}
-		device.log.Verbosef("UAPI: hsm library path:%s", params[0])
-		device.log.Verbosef("UAPI: hsm slot:%s", params[1])
+		device.log.Verbosef("UAPI: hsm library path=%s slot=%s", params[0], params[1])
 		var hsmDevice *pkclient.PKClient
 		if len(params) < 3 || params[2] == "" {
 			// pin not saved, get directly from user input
@@ -226,13 +230,17 @@ func (device *Device) handleDeviceLine(key, value string) error {
 			}
 		}
 
-		fmt.Printf("HSM loaded, found public key: %s\n", hsmDevice.PublicKeyB64())
+		pubKey, _ := hsmDevice.PublicKeyNoise()
+		fmt.Printf("HSM loaded, found public key: %s\n", base64.StdEncoding.EncodeToString(pubKey[:]))
 		device.staticIdentity.hsm = hsmDevice
 		device.staticIdentity.hsmEnabled = true
 
 		// call private key with an all zeros private key
 		var blankPK NoisePrivateKey
-		device.SetPrivateKey(blankPK)
+		err = device.SetPrivateKey(blankPK)
+		if err != nil {
+			return ipcErrorf(ipc.IpcErrorInvalid, "failed to parse hsm: %w", err)
+		}
 
 	case "private_key":
 		var sk NoisePrivateKey
@@ -241,7 +249,10 @@ func (device *Device) handleDeviceLine(key, value string) error {
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to set private_key: %w", err)
 		}
 		device.log.Verbosef("UAPI: Updating private key")
-		device.SetPrivateKey(sk)
+		err = device.SetPrivateKey(sk)
+		if err != nil {
+			return ipcErrorf(ipc.IpcErrorInvalid, "failed to parse hsm: %w", err)
+		}
 
 	case "listen_port":
 		port, err := strconv.ParseUint(value, 10, 16)

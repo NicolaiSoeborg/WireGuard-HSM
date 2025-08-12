@@ -19,7 +19,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/garnoth/pkclient"
+	"github.com/NicolaiSoeborg/pkclient"
 	"golang.zx2c4.com/wireguard/ipc"
 )
 

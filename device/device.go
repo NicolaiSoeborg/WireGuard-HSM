@@ -281,7 +281,9 @@ func (device *Device) SetPrivateKey(sk NoisePrivateKey) error {
 
 	// update key material
 
-	device.staticIdentity.privateKey = sk
+	if !device.staticIdentity.hsmEnabled {
+		device.staticIdentity.privateKey = sk
+	}
 	device.staticIdentity.publicKey = publicKey
 	device.cookieChecker.Init(publicKey)
 

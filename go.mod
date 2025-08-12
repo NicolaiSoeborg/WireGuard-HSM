@@ -1,11 +1,9 @@
 module golang.zx2c4.com/wireguard
 
-go 1.24
-
-toolchain go1.24.2
+go 1.23.1
 
 require (
-	github.com/garnoth/pkclient v0.0.0
+	github.com/NicolaiSoeborg/pkclient v0.0.0
 	golang.org/x/crypto v0.39.0
 	golang.org/x/net v0.41.0
 	golang.org/x/sys v0.33.0
@@ -23,4 +21,4 @@ require (
 	golang.org/x/term v0.32.0 // indirect
 )
 
-replace github.com/garnoth/pkclient => ../pkclient
+replace github.com/NicolaiSoeborg/pkclient => ../pkclient

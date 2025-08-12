@@ -251,7 +251,7 @@ func (device *Device) handleDeviceLine(key, value string) error {
 		device.log.Verbosef("UAPI: Updating private key")
 		err = device.SetPrivateKey(sk)
 		if err != nil {
-			return ipcErrorf(ipc.IpcErrorInvalid, "failed to parse hsm: %w", err)
+			return ipcErrorf(ipc.IpcErrorInvalid, "failed to set private_key: %w", err)
 		}
 
 	case "listen_port":

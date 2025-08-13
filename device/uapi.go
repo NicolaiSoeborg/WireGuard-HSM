@@ -86,9 +86,9 @@ func (device *Device) IpcGetOperation(w io.Writer) error {
 
 		// serialize device related values
 
-		//if !device.staticIdentity.privateKey.IsZero() {
-		//	keyf("private_key", &device.staticIdentity.privateKey)
-		//}
+		if !device.staticIdentity.privateKey.IsZero() {
+			sendf("private_key=%s", device.staticIdentity.privateKey.Serialize())
+		}
 
 		if device.net.port != 0 {
 			sendf("listen_port=%d", device.net.port)

@@ -27,19 +27,20 @@ type Hsm struct {
 	privKeyObj p11.Object  // the private key handle key on the hsm
 	pubKeyObj  p11.Object  // the public key handle on the hsm
 	module     p11.Module
+	serialized string
 	isReady    bool
 }
 
 // Open a session with the HSM, select the slot and login to it
 // A public and private key must already exist on the HSM
 // The private key must be the Curve25519 Algorithm, OID 1.3.101.110
-func InitHsm(hsmPath string, slot uint, pin string) (*Hsm, error) {
+func InitHsm(modPath string, slot uint, pin string) (*Hsm, error) {
 	client := new(Hsm)
 	client.isReady = false
 
-	module, err := p11.OpenModule(hsmPath)
+	module, err := p11.OpenModule(modPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load module library: %s. Error: %w", hsmPath, err)
+		return nil, fmt.Errorf("failed to load module library: %s. Error: %w", modPath, err)
 	}
 	client.module = module // save so we can close
 
@@ -73,6 +74,7 @@ func InitHsm(hsmPath string, slot uint, pin string) (*Hsm, error) {
 
 	client.pubKeyObj = X25519KeyPair.publicKey
 	client.privKeyObj = X25519KeyPair.privateKey
+	client.serialized = fmt.Sprintf("hsm=%s,%d", modPath, slot)
 	client.isReady = true
 
 	return client, nil
@@ -80,6 +82,10 @@ func InitHsm(hsmPath string, slot uint, pin string) (*Hsm, error) {
 
 func (client *Hsm) IsZero() bool {
 	return !client.isReady
+}
+
+func (client *Hsm) Serialize() string {
+	return client.serialized
 }
 
 func (client *Hsm) Close() {

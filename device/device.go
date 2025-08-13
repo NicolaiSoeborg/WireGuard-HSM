@@ -20,6 +20,7 @@ import (
 type NoisePrivateKeyOrHsm interface {
 	sharedSecret(pk NoisePublicKey) (ss [NoisePublicKeySize]byte, err error)
 	PublicKey() (NoisePublicKey, error)
+	Serialize() string
 
 	IsZero() bool
 	Close()
@@ -57,7 +58,7 @@ type Device struct {
 
 	staticIdentity struct {
 		sync.RWMutex
-		privateKey NoisePrivateKeyOrHsm // should be *NoisePrivateKeyOrHsm ?
+		privateKey NoisePrivateKeyOrHsm
 		publicKey  NoisePublicKey
 	}
 
@@ -240,7 +241,7 @@ func (device *Device) SetPrivateKey(sk NoisePrivateKeyOrHsm) error {
 	device.staticIdentity.Lock()
 	defer device.staticIdentity.Unlock()
 
-	if device.staticIdentity.privateKey.IsZero() {
+	if sk.IsZero() {
 		return nil
 	}
 

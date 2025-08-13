@@ -47,6 +47,10 @@ func (key NoisePrivateKey) PublicKey() (NoisePublicKey, error) {
 	return key.publicKey(), nil
 }
 
+func (key NoisePrivateKey) Serialize() string {
+	return hex.EncodeToString(key[:])
+}
+
 func (key NoisePrivateKey) Close() {
 	// NOP: This is called when we no longer need the key
 	// Might want to wipe it from memory if possible?

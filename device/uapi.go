@@ -19,7 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NicolaiSoeborg/pkclient"
 	"golang.zx2c4.com/wireguard/ipc"
 )
 
@@ -213,25 +212,16 @@ func (device *Device) handleDeviceLine(key, value string) error {
 			return ipcErrorf(ipc.IpcErrorInvalid, "hsm slot invalid: %w", err)
 		}
 		device.log.Verbosef("UAPI: hsm library path=%s slot=%s", params[0], params[1])
-		var hsmDevice *pkclient.PKClient
 		if len(params) < 3 || params[2] == "" {
-			// pin not saved, get directly from user input
-			device.log.Verbosef("UAPI: Attempting to get pin from user")
-			hsmDevice, err = pkclient.New_AskPin(params[0], uint(slot))
-			if err != nil {
-				return ipcErrorf(ipc.IpcErrorInvalid, "hsm setup failed: %w", err)
-			}
-		} else {
-			// pin supplied in config file
-			device.log.Verbosef("UAPI: Reading pin from config file")
-			hsmDevice, err = pkclient.New(params[0], uint(slot), params[2])
-			if err != nil {
-				return ipcErrorf(ipc.IpcErrorInvalid, "hsm setup failed: %w", err)
-			}
+			return ipcErrorf(ipc.IpcErrorInvalid, "hsm setup failed, no PIN")
+		}
+		hsmDevice, err := NewHsm(params[0], uint(slot), params[2])
+		if err != nil {
+			return ipcErrorf(ipc.IpcErrorInvalid, "hsm setup failed: %w", err)
 		}
 
 		pubKey, _ := hsmDevice.PublicKeyNoise()
-		fmt.Printf("HSM loaded, found public key: %s\n", base64.StdEncoding.EncodeToString(pubKey[:]))
+		fmt.Printf("hsm loaded, found public key: %s\n", base64.StdEncoding.EncodeToString(pubKey[:]))
 		device.staticIdentity.hsm = hsmDevice
 		device.staticIdentity.hsmEnabled = true
 

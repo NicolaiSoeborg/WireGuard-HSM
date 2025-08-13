@@ -14,31 +14,32 @@ import (
 )
 
 const (
-	CURVE25519_OID_RAW  = "06032B656E"  // 1.3.101.110 ("id-X25519")
+	CURVE25519_OID_RAW = "06032B656E" // 1.3.101.110 ("id-X25519")
 )
 
 type DeriveKeyPair struct {
-    publicKey  p11.Object
-    privateKey p11.Object
+	publicKey  p11.Object
+	privateKey p11.Object
 }
 
 type Hsm struct {
-	slot       uint        // slot to use on the HSM
 	session    p11.Session // session object
 	privKeyObj p11.Object  // the private key handle key on the hsm
 	pubKeyObj  p11.Object  // the public key handle on the hsm
 	module     p11.Module
+	isReady    bool
 }
 
-// Try to open a session with the HSM, select the slot and login to it
-// A public and private key must already exist on the hsm
-// The private and match public key must also be found during setup
+// Open a session with the HSM, select the slot and login to it
+// A public and private key must already exist on the HSM
 // The private key must be the Curve25519 Algorithm, OID 1.3.101.110
-func NewHsm(hsmPath string, slot uint, pin string) (*Hsm, error) {
+func InitHsm(hsmPath string, slot uint, pin string) (*Hsm, error) {
 	client := new(Hsm)
+	client.isReady = false
+
 	module, err := p11.OpenModule(hsmPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load module library: %s", hsmPath)
+		return nil, fmt.Errorf("failed to load module library: %s. Error: %w", hsmPath, err)
 	}
 	client.module = module // save so we can close
 
@@ -54,9 +55,8 @@ func NewHsm(hsmPath string, slot uint, pin string) (*Hsm, error) {
 	// try to open a session on the slot
 	client.session, err = slots[slot].OpenWriteSession()
 	if err != nil {
-		return nil, fmt.Errorf("failed to open session on slot %d", slot)
+		return nil, fmt.Errorf("failed to open session on slot %d. Error: %w", slot, err)
 	}
-	client.slot = slot
 
 	// try to login to the slot
 
@@ -66,15 +66,20 @@ func NewHsm(hsmPath string, slot uint, pin string) (*Hsm, error) {
 	}
 
 	// make sure the hsm has a curve25519 key for deriving
-	//X25519KeyPair, err := client.findDeriveKey()
-	//if err != nil {
-	//	return nil, fmt.Errorf("failed to find X25519 key for deriving: %w", err)
-	//}
+	X25519KeyPair, err := client.findDeriveKey()
+	if err != nil {
+		return nil, fmt.Errorf("failed to find X25519 key for deriving: %w", err)
+	}
 
-	//client.pubKeyObj = X25519KeyPair.publicKey
-	//client.privKeyObj = X25519KeyPair.privateKey
+	client.pubKeyObj = X25519KeyPair.publicKey
+	client.privKeyObj = X25519KeyPair.privateKey
+	client.isReady = true
 
 	return client, nil
+}
+
+func (client *Hsm) IsZero() bool {
+	return !client.isReady
 }
 
 func (client *Hsm) Close() {
@@ -84,21 +89,21 @@ func (client *Hsm) Close() {
 }
 
 // Returns a 32 byte length key from the hsm. attempts to convert to a usable WG key
-func (client *Hsm) PublicKeyNoise() (key [NoisePublicKeySize]byte, err error) {
-	var nullKey [NoisePublicKeySize]byte // temp garbage key (all 0's) so we can return the error
+func (client *Hsm) PublicKey() (key NoisePublicKey, err error) {
+	var nullKey NoisePublicKey // temp garbage key (all 0's) so we can return the error
 
 	// From my understanding, for X25519 the public key is not stored
 	// in `CKA_VALUE` but instead in attribute `CKA_EC_POINT`.
 	// "DER-encoding of the public key value in little endian order as defined in RFC 7748"
 	// - https://docs.oasis-open.org/pkcs11/pkcs11-curr/v3.0/cs01/pkcs11-curr-v3.0-cs01.html
-	pubKeyVal, err := client.pubKeyObj.Attribute(pkcs11.CKA_EC_POINT);
+	pubKeyVal, err := client.pubKeyObj.Attribute(pkcs11.CKA_EC_POINT)
 	if err != nil {
 		return nullKey, err
 	}
 	if len(pubKeyVal) != NoisePublicKeySize {
 		// On a Nitrokey Start, this gets the full EC_POINT value of 34 bytes instead of 32,
 		// If prefix is "04 (OCTET STRING) 20 (of length 0x20)" then discard the prefix
-		if len(pubKeyVal) == NoisePublicKeySize + 2 && pubKeyVal[0] == 0x04 && pubKeyVal[1] == 0x20 {
+		if len(pubKeyVal) == NoisePublicKeySize+2 && pubKeyVal[0] == 0x04 && pubKeyVal[1] == 0x20 {
 			pubKeyVal = pubKeyVal[2:]
 		} else {
 			return nullKey, fmt.Errorf("Key of wrong size returned (%d)", len(pubKeyVal))
@@ -111,7 +116,7 @@ func (client *Hsm) PublicKeyNoise() (key [NoisePublicKeySize]byte, err error) {
 
 // derive a shared secret using the input public key against the private key that was found during setup
 // returns a fixed 32 byte array
-func (client *Hsm) DeriveNoise(peerPubKey [NoisePublicKeySize]byte) (secret [NoisePrivateKeySize]byte, err error) {
+func (client *Hsm) sharedSecret(peerPubKey NoisePublicKey) (secret [NoisePrivateKeySize]byte, err error) {
 	var nullKey [NoisePublicKeySize]byte // temp garbage key (all 0's) so we can return the error
 
 	var mech_mech uint = pkcs11.CKM_ECDH1_DERIVE
@@ -165,7 +170,7 @@ func (dev *Hsm) findDeriveKey() (keys DeriveKeyPair, err error) {
 		return keys, fmt.Errorf("Could not find private key with attrs: %w", err)
 	}
 
-	ckaId, err := keys.privateKey.Attribute(pkcs11.CKA_ID);
+	ckaId, err := keys.privateKey.Attribute(pkcs11.CKA_ID)
 	if err != nil {
 		return keys, fmt.Errorf("Could not find CKA_ID of private key: %w", err)
 	}
@@ -183,4 +188,3 @@ func (dev *Hsm) findDeriveKey() (keys DeriveKeyPair, err error) {
 
 	return keys, nil
 }
-

@@ -41,6 +41,17 @@ func (key NoisePrivateKey) IsZero() bool {
 	return key.Equals(zero)
 }
 
+// Software-based `NoisePrivateKey` can't fail to produce a PublicKey
+// but this interface is needed due to HSM (that can fail to produce a PublicKey)
+func (key NoisePrivateKey) PublicKey() (NoisePublicKey, error) {
+	return key.publicKey(), nil
+}
+
+func (key NoisePrivateKey) Close() {
+	// NOP: This is called when we no longer need the key
+	// Might want to wipe it from memory if possible?
+}
+
 func (key NoisePrivateKey) Equals(tar NoisePrivateKey) bool {
 	return subtle.ConstantTimeCompare(key[:], tar[:]) == 1
 }

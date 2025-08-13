@@ -86,9 +86,9 @@ func (device *Device) IpcGetOperation(w io.Writer) error {
 
 		// serialize device related values
 
-		if !device.staticIdentity.privateKey.IsZero() {
-			keyf("private_key", (*[32]byte)(&device.staticIdentity.privateKey))
-		}
+		//if !device.staticIdentity.privateKey.IsZero() {
+		//	keyf("private_key", &device.staticIdentity.privateKey)
+		//}
 
 		if device.net.port != 0 {
 			sendf("listen_port=%d", device.net.port)
@@ -215,19 +215,15 @@ func (device *Device) handleDeviceLine(key, value string) error {
 		if len(params) < 3 || params[2] == "" {
 			return ipcErrorf(ipc.IpcErrorInvalid, "hsm setup failed, no PIN")
 		}
-		hsmDevice, err := NewHsm(params[0], uint(slot), params[2])
+		hsmDevice, err := InitHsm(params[0], uint(slot), params[2])
 		if err != nil {
 			return ipcErrorf(ipc.IpcErrorInvalid, "hsm setup failed: %w", err)
 		}
 
-		pubKey, _ := hsmDevice.PublicKeyNoise()
-		fmt.Printf("hsm loaded, found public key: %s\n", base64.StdEncoding.EncodeToString(pubKey[:]))
-		device.staticIdentity.hsm = hsmDevice
-		device.staticIdentity.hsmEnabled = true
+		pubKey, _ := hsmDevice.PublicKey()
+		fmt.Printf("hsm loaded, found public key in HSM: %s\n", base64.StdEncoding.EncodeToString(pubKey[:]))
 
-		// call private key with an all zeros private key
-		var blankPK NoisePrivateKey
-		err = device.SetPrivateKey(blankPK)
+		err = device.SetPrivateKey(hsmDevice)
 		if err != nil {
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to parse hsm: %w", err)
 		}
@@ -239,7 +235,7 @@ func (device *Device) handleDeviceLine(key, value string) error {
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to set private_key: %w", err)
 		}
 		device.log.Verbosef("UAPI: Updating private key")
-		err = device.SetPrivateKey(sk)
+		err = device.SetPrivateKey(&sk)
 		if err != nil {
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to set private_key: %w", err)
 		}

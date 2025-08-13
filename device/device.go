@@ -17,6 +17,14 @@ import (
 	"golang.zx2c4.com/wireguard/tun"
 )
 
+type NoisePrivateKeyOrHsm interface {
+	sharedSecret(pk NoisePublicKey) (ss [NoisePublicKeySize]byte, err error)
+	PublicKey() (NoisePublicKey, error)
+
+	IsZero() bool
+	Close()
+}
+
 type Device struct {
 	state struct {
 		// state holds the device's state. It is accessed atomically.
@@ -49,10 +57,8 @@ type Device struct {
 
 	staticIdentity struct {
 		sync.RWMutex
-		privateKey NoisePrivateKey
+		privateKey NoisePrivateKeyOrHsm // should be *NoisePrivateKeyOrHsm ?
 		publicKey  NoisePublicKey
-		hsm        *Hsm
-		hsmEnabled bool
 	}
 
 	peers struct {
@@ -228,29 +234,13 @@ func (device *Device) IsUnderLoad() bool {
 	return device.rate.underLoadUntil.Load() > now.UnixNano()
 }
 
-func (device *Device) DeriveSharedSecret(ephemeral NoisePublicKey) ([NoisePublicKeySize]byte, error) {
-	if device.staticIdentity.hsmEnabled {
-		return device.staticIdentity.hsm.DeriveNoise(ephemeral)
-	}
-	return device.staticIdentity.privateKey.sharedSecret(ephemeral)
-}
-
-func (device *Device) GetNoisePublicKey(sk NoisePrivateKey) (NoisePublicKey, error) {
-    if device.staticIdentity.hsmEnabled {
-        return device.staticIdentity.hsm.PublicKeyNoise()
-    }
-    return sk.publicKey(), nil
-}
-
-func (device *Device) SetPrivateKey(sk NoisePrivateKey) error {
+func (device *Device) SetPrivateKey(sk NoisePrivateKeyOrHsm) error {
 	// lock required resources
 
 	device.staticIdentity.Lock()
 	defer device.staticIdentity.Unlock()
 
-	// if the hsm is enabled, let this function continue, since the privateKey is zero
-	if sk.Equals(device.staticIdentity.privateKey) &&
-		!device.staticIdentity.hsmEnabled {
+	if device.staticIdentity.privateKey.IsZero() {
 		return nil
 	}
 
@@ -265,7 +255,7 @@ func (device *Device) SetPrivateKey(sk NoisePrivateKey) error {
 
 	// remove peers with matching public keys
 
-	publicKey, err := device.GetNoisePublicKey(sk)
+	publicKey, err := sk.PublicKey()
 	if err != nil {
 		return err
 	}
@@ -280,9 +270,7 @@ func (device *Device) SetPrivateKey(sk NoisePrivateKey) error {
 
 	// update key material
 
-	if !device.staticIdentity.hsmEnabled {
-		device.staticIdentity.privateKey = sk
-	}
+	device.staticIdentity.privateKey = sk
 	device.staticIdentity.publicKey = publicKey
 	device.cookieChecker.Init(publicKey)
 
@@ -291,7 +279,7 @@ func (device *Device) SetPrivateKey(sk NoisePrivateKey) error {
 	expiredPeers := make([]*Peer, 0, len(device.peers.keyMap))
 	for _, peer := range device.peers.keyMap {
 		handshake := &peer.handshake
-		handshake.precomputedStaticStatic, _ = device.DeriveSharedSecret(handshake.remoteStatic)
+		handshake.precomputedStaticStatic, _ = device.staticIdentity.privateKey.sharedSecret(handshake.remoteStatic)
 		expiredPeers = append(expiredPeers, peer)
 	}
 
@@ -402,9 +390,7 @@ func (device *Device) Close() {
 	device.state.state.Store(uint32(deviceStateClosed))
 	device.log.Verbosef("Device closing")
 
-	if device.staticIdentity.hsmEnabled {
-		device.staticIdentity.hsm.Close()
-	}
+	device.staticIdentity.privateKey.Close()
 	device.tun.device.Close()
 	device.downLocked()
 

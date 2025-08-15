@@ -221,7 +221,7 @@ func (device *Device) handleDeviceLine(key, value string) error {
 		}
 
 		pubKey, _ := hsmDevice.PublicKey()
-		fmt.Printf("hsm loaded, found public key in HSM: %s\n", base64.StdEncoding.EncodeToString(pubKey[:]))
+		device.log.Verbosef("hsm loaded, found public key in HSM: %s\n", base64.StdEncoding.EncodeToString(pubKey[:]))
 
 		err = device.SetPrivateKey(hsmDevice)
 		if err != nil {

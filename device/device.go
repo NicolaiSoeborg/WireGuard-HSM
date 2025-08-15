@@ -391,7 +391,9 @@ func (device *Device) Close() {
 	device.state.state.Store(uint32(deviceStateClosed))
 	device.log.Verbosef("Device closing")
 
-	device.staticIdentity.privateKey.Close()
+	if device.staticIdentity.privateKey != nil {
+		device.staticIdentity.privateKey.Close()
+	}
 	device.tun.device.Close()
 	device.downLocked()
 

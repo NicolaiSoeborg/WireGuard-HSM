@@ -86,7 +86,7 @@ func (device *Device) IpcGetOperation(w io.Writer) error {
 
 		// serialize device related values
 
-		if !device.staticIdentity.privateKey.IsZero() {
+		if device.staticIdentity.privateKey != nil && !device.staticIdentity.privateKey.IsZero() {
 			sendf("private_key=%s", device.staticIdentity.privateKey.Serialize())
 		}
 

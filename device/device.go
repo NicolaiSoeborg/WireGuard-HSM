@@ -280,7 +280,10 @@ func (device *Device) SetPrivateKey(sk NoisePrivateKeyOrHsm) error {
 	expiredPeers := make([]*Peer, 0, len(device.peers.keyMap))
 	for _, peer := range device.peers.keyMap {
 		handshake := &peer.handshake
-		handshake.precomputedStaticStatic, _ = device.staticIdentity.privateKey.sharedSecret(handshake.remoteStatic)
+		handshake.precomputedStaticStatic, err = device.staticIdentity.privateKey.sharedSecret(handshake.remoteStatic)
+		if err != nil {
+			return err
+		}
 		expiredPeers = append(expiredPeers, peer)
 	}
 

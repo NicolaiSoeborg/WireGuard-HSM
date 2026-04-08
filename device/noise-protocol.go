@@ -359,6 +359,7 @@ func (device *Device) ConsumeMessageInitiation(msg *MessageInitiation) *Peer {
 	var key [chacha20poly1305.KeySize]byte
 	ss, err := device.staticIdentity.privateKey.sharedSecret(msg.Ephemeral)
 	if err != nil {
+		device.log.Errorf("Failed to ConsumeMessageInitiation: %v", err)
 		return nil
 	}
 	KDF2(&chainKey, &key, chainKey[:], ss[:])
@@ -549,6 +550,7 @@ func (device *Device) ConsumeMessageResponse(msg *MessageResponse) *Peer {
 
 		ss, err := handshake.localEphemeral.sharedSecret(msg.Ephemeral)
 		if err != nil {
+			device.log.Errorf("Failed to ConsumeMessageResponse (localEphemeral): %v", err)
 			return false
 		}
 		mixKey(&chainKey, &chainKey, ss[:])
@@ -556,6 +558,7 @@ func (device *Device) ConsumeMessageResponse(msg *MessageResponse) *Peer {
 
 		ss, err = device.staticIdentity.privateKey.sharedSecret(msg.Ephemeral)
 		if err != nil {
+			device.log.Errorf("Failed to ConsumeMessageResponse (privateKey): %v", err)
 			return false
 		}
 		mixKey(&chainKey, &chainKey, ss[:])

@@ -40,7 +40,7 @@ func randDevice(t *testing.T) *Device {
 	tun := tuntest.NewChannelTUN()
 	logger := NewLogger(LogLevelError, "")
 	device := NewDevice(tun.TUN(), conn.NewDefaultBind(), logger)
-	device.SetPrivateKey(sk)
+	device.SetPrivateKey(&sk)
 	return device
 }
 
@@ -63,11 +63,19 @@ func TestNoiseHandshake(t *testing.T) {
 	defer dev1.Close()
 	defer dev2.Close()
 
-	peer1, err := dev2.NewPeer(dev1.staticIdentity.privateKey.publicKey())
+	pk1, err := dev1.staticIdentity.privateKey.PublicKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	peer2, err := dev1.NewPeer(dev2.staticIdentity.privateKey.publicKey())
+	peer1, err := dev2.NewPeer(pk1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pk2, err := dev2.staticIdentity.privateKey.PublicKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer2, err := dev1.NewPeer(pk2)
 	if err != nil {
 		t.Fatal(err)
 	}

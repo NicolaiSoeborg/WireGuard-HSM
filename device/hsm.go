@@ -91,8 +91,12 @@ func (client *Hsm) Serialize() string {
 }
 
 func (client *Hsm) Close() {
-	client.session.Logout()
-	client.session.Close()
+	client.isReady = false
+	if client.session != nil {
+		client.session.Logout()
+		client.session.Close()
+		client.session = nil
+	}
 	client.module.Destroy()
 }
 

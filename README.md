@@ -44,15 +44,15 @@ This will run on FreeBSD. It does not yet support sticky sockets. Fwmark is mapp
 
 This will run on OpenBSD. It does not yet support sticky sockets. Fwmark is mapped to `SO_RTABLE`. Since the tun driver cannot have arbitrary interface names, you must either use `tun[0-9]+` for an explicit interface name or `tun` to have the program select one for you. If you choose `tun` as the interface name, and the environment variable `WG_TUN_NAME_FILE` is defined, then the actual name of the interface chosen by the kernel is written to the file specified by that variable.
 
-## HSM-based keys
+## Experimental: Keys stored in hardware (`PKCS#11`)
 
-This implementation of WireGuard supports ECDH key derivation inside a HSM instead of performing it the computer in software.
-In the HSM mode, WireGuard and the whole operating system doesn't have direct access to the private key, the key is safely stored on the HSM only available when unlocked by a PIN/password.
+This implementation of WireGuard supports ECDH key derivation inside a HSM instead of performing it in software.
+In the HSM mode, WireGuard and the whole operating system doesn't have direct access to the private key, the key is safely stored on a HSM only available when unlocked by a PIN/password.
 
 To use the experimental feature, make sure your HSM is ready (contains an X25519 key) and load the PKCS#11 library using `PostUp`:
 
 ```
-PostUp = printf 'set=1\nhsm=/usr/lib64/opensc-pkcs11.so,0,%s\n\n' "$(read -s -p 'PIN: ' p && echo -n $p)" | nc -q1 -U /var/run/wireguard/%i.sock
+PostUp = printf 'set=1\nhsm=/usr/lib64/opensc-pkcs11.so,0,%s\n\n' "$(read -s -p 'PIN: ' p && echo -n $p)" | socat - UNIX-CONNECT:/var/run/wireguard/%i.sock
 ```
 
 Note that this feature is currently only implemented in `wireguard-go`, i.e. there isn't a kernel implementation of this work yet.

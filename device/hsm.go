@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: MIT
  *
- * Copyright (C) 2017-2025 WireGuard LLC. All Rights Reserved.
+ * Copyright (C) 2017-2026 WireGuard LLC. All Rights Reserved.
  */
 
 package device
@@ -23,17 +23,17 @@ type DeriveKeyPair struct {
 }
 
 type Hsm struct {
-	session    p11.Session // session object
-	privKeyObj p11.Object  // the private key handle key on the hsm
-	pubKeyObj  p11.Object  // the public key handle on the hsm
-	module     p11.Module
+	session    p11.Session // PKCS#11 session object
+	privKeyObj p11.Object  // ref to private key on HSM
+	pubKeyObj  p11.Object  // ref to public key on HSM
+	module     p11.Module  // PKCS#11 library to communicate with HSM
 	serialized string
 	isReady    bool
 }
 
-// Open a session with the HSM, select the slot and login to it
-// A public and private key must already exist on the HSM
-// The private key must be the Curve25519 Algorithm, OID 1.3.101.110
+// Open a session with the HSM, select the slot and login to unlock the HSM
+// A public and private key must already exist on the HSM and the private
+// key must have "EC domain parameters" set to id-X25519 (1.3.101.110)
 func InitHsm(modPath string, slot uint, pin string) (*Hsm, error) {
 	client := new(Hsm)
 	client.isReady = false
@@ -53,20 +53,16 @@ func InitHsm(modPath string, slot uint, pin string) (*Hsm, error) {
 		return nil, fmt.Errorf("Requested slot (%d) but only %d available", slot, len(slots))
 	}
 
-	// try to open a session on the slot
-	client.session, err = slots[slot].OpenWriteSession()
+	client.session, err = slots[slot].OpenSession()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to open session on slot %d. Error: %w", slot, err)
 	}
-
-	// try to login to the slot
 
 	err = client.session.Login(pin)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to login: %w", err)
 	}
 
-	// make sure the hsm has a curve25519 key for deriving
 	X25519KeyPair, err := client.findDeriveKey()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to find X25519 key for deriving: %w", err)
@@ -101,7 +97,7 @@ func (client *Hsm) Close() {
 }
 
 func (client *Hsm) PublicKey() (key NoisePublicKey, err error) {
-	var nullKey NoisePublicKey // temp garbage key (all 0's) so we can return the error
+	var nullKey NoisePublicKey // temp garbage key (all 0's) so we can return an error
 
 	// "DER-encoding of the public key value in little endian order as defined in RFC 7748"
 	// - https://docs.oasis-open.org/pkcs11/pkcs11-curr/v3.0/cs01/pkcs11-curr-v3.0-cs01.html
@@ -114,7 +110,7 @@ func (client *Hsm) PublicKey() (key NoisePublicKey, err error) {
 	if len(pubKeyVal) == NoisePublicKeySize+2 && pubKeyVal[0] == 0x04 && pubKeyVal[1] == 0x20 {
 		pubKeyVal = pubKeyVal[2:]
 	} else {
-		return nullKey, fmt.Errorf("Key of wrong size returned (%d)", len(pubKeyVal))
+		return nullKey, fmt.Errorf("Key of wrong size or prefix returned (got %d bytes)", len(pubKeyVal))
 	}
 
 	copy(key[:], pubKeyVal[:])
@@ -122,24 +118,7 @@ func (client *Hsm) PublicKey() (key NoisePublicKey, err error) {
 }
 
 func (client *Hsm) sharedSecret(peerPubKey NoisePublicKey) (secret [NoisePrivateKeySize]byte, err error) {
-	var nullKey [NoisePublicKeySize]byte // temp garbage key (all 0's) so we can return the error
-
-	var mech_mech uint = pkcs11.CKM_ECDH1_DERIVE
-
-	// before we call derive, we need to have an array of attributes which specify the type of
-	// key to be returned, in our case, it's the shared secret key, produced via deriving
-	// This template pulled from OpenSC pkcs11-tool.c line 4038
-	attrTemplate := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, false),
-		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
-		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_GENERIC_SECRET),
-		pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, false),
-		pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, true),
-		pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, true),
-		pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, true),
-		pkcs11.NewAttribute(pkcs11.CKA_WRAP, true),
-		pkcs11.NewAttribute(pkcs11.CKA_UNWRAP, true),
-	}
+	var nullKey [NoisePublicKeySize]byte // temp garbage key (all 0's) so we can return an error
 
 	// https://docs.oasis-open.org/pkcs11/pkcs11-curr/v3.0/cs01/pkcs11-curr-v3.0-cs01.html
 	// NewECDH1DeriveParams(kdf uint, sharedData []byte, publicKeyData []byte)
@@ -148,15 +127,25 @@ func (client *Hsm) sharedSecret(peerPubKey NoisePublicKey) (secret [NoisePrivate
 	// publicKeyData => "[...] other party’s EC public key value. A token MUST be able to accept this value encoded as a raw octet string"
 	ecdhParams := pkcs11.NewECDH1DeriveParams(pkcs11.CKD_NULL, nil, peerPubKey[:])
 
-	var mech *pkcs11.Mechanism = pkcs11.NewMechanism(mech_mech, ecdhParams)
+	var deriveMech *pkcs11.Mechanism = pkcs11.NewMechanism(pkcs11.CKM_ECDH1_DERIVE, ecdhParams)
+
+	// Before we call derive, we need to have an array of attributes which specify the type of
+	// key (shared secret) to be returned
+	attrTemplate := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
+		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_GENERIC_SECRET), // output (shared secret) is a raw byte string with no structure ("generic secret")
+		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, false),                        // we want to derive a "session object" (temporary for this session only)
+		pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, true),                   // shared secret can be exported to software
+		pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, false),                    // shared secret can be exported raw
+	}
 
 	// derive the secret key from the public key as input and the private key on the device
-	ss, err := p11.PrivateKey(client.privKeyObj).Derive(*mech, attrTemplate)
+	ss, err := p11.PrivateKey(client.privKeyObj).Derive(*deriveMech, attrTemplate)
 	if err != nil {
 		return nullKey, err
 	}
 	if len(ss) != NoisePrivateKeySize {
-		return nullKey, fmt.Errorf("Wrong size derived (%d)", len(ss))
+		return nullKey, fmt.Errorf("Shared secret of wrong size derived (%d bytes)", len(ss))
 	}
 	copy(secret[:], ss[:])
 	return secret, nil
@@ -169,9 +158,11 @@ func (dev *Hsm) findDeriveKey() (keys DeriveKeyPair, err error) {
 
 	// Find a private X25519 key that is allowed to derive
 	privateAttrs := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_EC_PARAMS, rawOID),
 		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PRIVATE_KEY),
-		pkcs11.NewAttribute(pkcs11.CKA_DERIVE, true),
+		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_EC),
+		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),       // look only for "token objects" (persisted on HSM)
+		pkcs11.NewAttribute(pkcs11.CKA_EC_PARAMS, rawOID), // private key be specified on the id-X25519 curve
+		pkcs11.NewAttribute(pkcs11.CKA_DERIVE, true),      // private key should be allowed to derive a shared secret
 	}
 
 	// FindObject expects a single key with above attrs, otherwise it returns err
@@ -188,8 +179,10 @@ func (dev *Hsm) findDeriveKey() (keys DeriveKeyPair, err error) {
 	}
 
 	publicAttrs := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_EC_PARAMS, rawOID),
 		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
+		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_EC),
+		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),       // look only for "token objects" (persisted on HSM)
+		pkcs11.NewAttribute(pkcs11.CKA_EC_PARAMS, rawOID), // public key be specified on the id-X25519 curve
 		pkcs11.NewAttribute(pkcs11.CKA_ID, ckaId),
 	}
 

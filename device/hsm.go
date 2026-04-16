@@ -159,7 +159,7 @@ func (dev *Hsm) findDeriveKey() (keys DeriveKeyPair, err error) {
 	// Find a private X25519 key that is allowed to derive
 	privateAttrs := []*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PRIVATE_KEY),
-		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_EC),
+		//pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_EC),
 		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),       // look only for "token objects" (persisted on HSM)
 		pkcs11.NewAttribute(pkcs11.CKA_EC_PARAMS, rawOID), // private key be specified on the id-X25519 curve
 		pkcs11.NewAttribute(pkcs11.CKA_DERIVE, true),      // private key should be allowed to derive a shared secret
@@ -180,7 +180,7 @@ func (dev *Hsm) findDeriveKey() (keys DeriveKeyPair, err error) {
 
 	publicAttrs := []*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
-		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_EC),
+		//pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_EC),
 		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),       // look only for "token objects" (persisted on HSM)
 		pkcs11.NewAttribute(pkcs11.CKA_EC_PARAMS, rawOID), // public key be specified on the id-X25519 curve
 		pkcs11.NewAttribute(pkcs11.CKA_ID, ckaId),

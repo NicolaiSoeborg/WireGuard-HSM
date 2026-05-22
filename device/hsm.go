@@ -106,10 +106,11 @@ func (client *Hsm) PublicKey() (key NoisePublicKey, err error) {
 		return nullKey, err
 	}
 
-	// Prefix is "\x04 (OCTET STRING) \x20 (of length 32)" followed by the raw key
+	// Prefix might be "\x04 (OCTET STRING) \x20 (of length 32)" followed by the raw key
 	if len(pubKeyVal) == NoisePublicKeySize+2 && pubKeyVal[0] == 0x04 && pubKeyVal[1] == 0x20 {
 		pubKeyVal = pubKeyVal[2:]
-	} else {
+	}
+	if len(pubKeyVal) != NoisePublicKeySize {
 		return nullKey, fmt.Errorf("Key of wrong size or prefix returned (got %d bytes)", len(pubKeyVal))
 	}
 

@@ -47,12 +47,12 @@ This will run on OpenBSD. It does not yet support sticky sockets. Fwmark is mapp
 ## Experimental: Keys stored in hardware (`PKCS#11`)
 
 This implementation of WireGuard supports ECDH key derivation inside a HSM instead of performing it in software.
-In the HSM mode, WireGuard and the whole operating system doesn't have direct access to the private key, the key is safely stored on a HSM only available when unlocked by a PIN/password.
+In HSM mode, WireGuard and the whole operating system doesn't have direct access to the private key, the key is safely stored on a HSM.
 
 To use the experimental feature, make sure your HSM is ready (contains an X25519 key) and load the PKCS#11 library using `PostUp`:
 
 ```
-PostUp = printf 'set=1\nhsm=/usr/lib64/opensc-pkcs11.so,0,%s\n\n' "$(read -s -p 'PIN: ' p && echo -n $p)" | socat - UNIX-CONNECT:/var/run/wireguard/%i.sock
+PostUp = printf 'set=1\nhsm=opensc-pkcs11.so,0,%s\n\n' "$(read -s -p 'PIN: ' p && echo -n $p)" | socat - UNIX-CONNECT:/var/run/wireguard/%i.sock
 ```
 
 Note that this feature is currently only implemented in `wireguard-go`, i.e. there isn't a kernel implementation of this work yet.

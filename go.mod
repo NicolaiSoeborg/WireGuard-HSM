@@ -3,7 +3,7 @@ module golang.zx2c4.com/wireguard
 go 1.23.1
 
 require (
-	github.com/miekg/pkcs11 v1.1.2-0.20231115102856-9078ad6b9d4b
+	github.com/miekg/pkcs11 v1.1.3-0.20260821220139-e0ca3850707b
 	golang.org/x/crypto v0.39.0
 	golang.org/x/net v0.41.0
 	golang.org/x/sys v0.33.0
